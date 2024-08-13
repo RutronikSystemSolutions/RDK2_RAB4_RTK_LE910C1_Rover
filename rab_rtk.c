@@ -27,10 +27,11 @@ static volatile uint8_t rx_done_flag = 0;
 uint8_t read_buffer[BUFFER_SIZE+1] = {0};
 uint16_t read_buffer_el_count = 0;
 
-#define DEBUG_OUTPUT
-#ifdef DEBUG_OUTPUT
+#undef DEBUG_OUTPUT
+
+// Needef for sprintf
 #include <stdio.h>
-#endif
+
 
 static const uint32_t STANDARD_TIMEOUT_US = 500000;
 static const uint32_t TIMEOUT_2SECONDS = 2000000;
@@ -45,20 +46,51 @@ void hal_uart_callback(void *callback_arg, cyhal_uart_event_t event)
 }
 
 
+int rab_rtk_telit_init_hardware()
+{
+	int retval = rab_rtk_init_gpios();
+	if (retval != 0)
+	{
+#ifdef DEBUG_OUTPUT
+		printf("rab_rtk_init_gpios error: %d\r\n", retval);
+#endif
+		return -1;
+	}
+
+	retval = hal_timer_init();
+	if (retval != 0)
+	{
+#ifdef DEBUG_OUTPUT
+		printf("hal_timer_init error: %d\r\n", retval);
+#endif
+		return -2;
+	}
+
+	retval = rab_rtk_init_telit_uart();
+	if (retval != 0)
+	{
+#ifdef DEBUG_OUTPUT
+		printf("rab_rtk_init_telit_uart error: %d\r\n", retval);
+#endif
+		return -3;
+	}
+	return 0;
+}
+
 int rab_rtk_init_gpios()
 {
-/**
-     * SHDN_CTRL -> 200ms high -> Turn OFF the Telit module
-     * Init to 0
-     */
-    cy_rslt_t result = cyhal_gpio_init(SHDN_CTRL, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 0);
-	if (result != CY_RSLT_SUCCESS) return -1;
+//	/**
+//     * SHDN_CTRL -> 200ms high -> Turn OFF the Telit module
+//     * Init to 0
+//     */
+//    cy_rslt_t result = cyhal_gpio_init(SHDN_CTRL, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 0);
+//	if (result != CY_RSLT_SUCCESS) return -1;
 
 	/**
 	 * ON_OFF_CTRL -> 1s high: Turn ON, 2.5s high: Turn OFF
 	 * Init to 0
 	 */
-	result = cyhal_gpio_init(ON_OFF_CTRL, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 0);
+	cy_rslt_t result = cyhal_gpio_init(ON_OFF_CTRL, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 0);
 	if (result != CY_RSLT_SUCCESS) return -2;
 
 	/**
@@ -68,12 +100,12 @@ int rab_rtk_init_gpios()
 	result = cyhal_gpio_init(PWR_LTE_N, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 0);
 	if (result != CY_RSLT_SUCCESS) return -3;
 
-	/**
-	 * PWR_GNSS_N -> 0: UM980 module power supply ON, 1: UM980 module power supply OFF
-	 * Init to 1 -> Power OFF
-	 */
-	result = cyhal_gpio_init(PWR_GNSS_N, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 1);
-	if (result != CY_RSLT_SUCCESS) return -4;
+//	/**
+//	 * PWR_GNSS_N -> 0: UM980 module power supply ON, 1: UM980 module power supply OFF
+//	 * Init to 1 -> Power OFF
+//	 */
+//	result = cyhal_gpio_init(PWR_GNSS_N, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 1);
+//	if (result != CY_RSLT_SUCCESS) return -4;
 
 
     return 0;
@@ -151,9 +183,10 @@ void rab_rtk_telit_power_on()
 
 void rab_rtk_telit_power_off()
 {
-    cyhal_gpio_write(ON_OFF_CTRL, 1);
-    CyDelay(2600);
-    cyhal_gpio_write(ON_OFF_CTRL, 0);
+    cyhal_gpio_write(SHDN_CTRL, 1);
+    CyDelay(300);
+    cyhal_gpio_write(SHDN_CTRL, 0);
+    CyDelay(100);
 }
 
 int rab_rtk_do()
@@ -227,14 +260,18 @@ static int send_command_and_wait(char* cmd, uint32_t timeout_us)
             // Buffer is full...
             if (toread == 0)
             {
+#ifdef DEBUG_OUTPUT
                 printf("Buffer is full: %s . Readable: %lu \r\n", read_buffer, readable);
+#endif
                 return -4;
             }
 
             int retval = hal_uart_read(&read_buffer[read_buffer_el_count], toread);
             if (retval < 0)
             {
+#ifdef DEBUG_OUTPUT
                 printf("hal_uart_read error\r\n");
+#endif
                 return -1;
             }
             read_buffer_el_count += toread;
@@ -243,22 +280,28 @@ static int send_command_and_wait(char* cmd, uint32_t timeout_us)
 
             if (strstr((char*)read_buffer, "OK\r\n"))
             {
+#ifdef DEBUG_OUTPUT
                 printf("[%s]\r\n", read_buffer);
+#endif
                 return 0;
             }
 
             if (strstr((char*)read_buffer, "ERROR\r\n"))
             {
+#ifdef DEBUG_OUTPUT
                 printf("ERROR: [%s]\r\n", read_buffer);
                 uint32_t elapsed_time = hal_timer_get_uticks() - start_time;
                 printf("After: %d miliseconds \r\n", (int)(elapsed_time / 1000));
+#endif
                 return -1;
             }
 
             // TODO: make it not dependent of the 1...
             if (strstr((char*)read_buffer, "SRING: 1\r\n"))
             {
+#ifdef DEBUG_OUTPUT
                 printf("Received SRING: [%s]\r\n", read_buffer);
+#endif
                 // Reset
                 read_buffer_el_count = 0;
                 read_buffer[read_buffer_el_count] = 0;
@@ -268,13 +311,17 @@ static int send_command_and_wait(char* cmd, uint32_t timeout_us)
         uint32_t current_time = hal_timer_get_uticks();
 		if (current_time < start_time)
         {
+#ifdef DEBUG_OUTPUT
             printf("strange timestamp\r\n");
+#endif
             return -3;
         }
 		if ((current_time - start_time) > timeout_us)
         {
+#ifdef DEBUG_OUTPUT
             printf("timeout. el_count: %d \r\n", read_buffer_el_count);
             printf("[%s]\r\n", read_buffer);
+#endif
             return -2;
         }
     }
@@ -683,7 +730,7 @@ int rab_rtk_telit_activate_deactivate_pdp_context(uint16_t context_id, uint16_t 
     return 0;
 }
 
-int rab_rtk_telit_open_socket()
+int rab_rtk_telit_open_socket(char* address, uint16_t port)
 {
     // AT#SD=<connId>,<txProt>,<rPort>,<IPaddr>[,<closureType>[,<lPort>[,<connMode> [,<txTime>[,<userIpType>]]]]]
     // txProt: 0: TCP, 1: UDP
@@ -693,8 +740,8 @@ int rab_rtk_telit_open_socket()
 
     const uint8_t connId = 1;
     const uint8_t txProt = 0; // TCP
-    const uint16_t rPort = 1507;
-    char ipaddr[] = "jordanrutronik.mywire.org";
+    const uint16_t rPort = port;
+    //char ipaddr[] = "jordanrutronik.mywire.org";
 
 
 //    const uint16_t rPort = 2101;
@@ -704,8 +751,8 @@ int rab_rtk_telit_open_socket()
     const uint8_t lPort = 0;
     const uint8_t connMode = 1; // command mode
 
-    char cmd[64] = {0};
-    sprintf(cmd, "AT#SD=%d,%d,%d,%s,%d,%d,%d\r\n", connId, txProt, rPort, ipaddr, closureType, lPort, connMode);
+    char cmd[128] = {0};
+    sprintf(cmd, "AT#SD=%d,%d,%d,%s,%d,%d,%d\r\n", connId, txProt, rPort, address, closureType, lPort, connMode);
 
     // Remark: timeout set with AT#SCFG
     int retval = send_command_and_wait(cmd, 150000000);
@@ -776,7 +823,7 @@ static int extract_socket_status(char* buffer, uint16_t len, uint8_t* socket_sta
     return -2;
 }
 
-int rab_rtk_telit_get_socket_status(telit_socket_status_e* status)
+int rab_rtk_telit_get_socket_status(telit_raw_socket_status_e* status)
 {
     char cmd[] = "AT#SS=1\r\n";
 
@@ -985,7 +1032,7 @@ int rab_rtk_telit_get_pin_status(telit_pin_status_e* status)
     // Extract the result to our request
     char result[64] = {0};
     retval = extract_result(result);
-    if (retval < 0)
+    if (retval <= 0)
     {
 #ifdef DEBUG_OUTPUT
         printf("extract_result error: %d\r\n", retval);
@@ -1234,7 +1281,9 @@ static int wait_for_socket_input()
             int retval = hal_uart_read(read_buffer, toread);
             if (retval < 0)
             {
+#ifdef DEBUG_OUTPUT
                 printf("hal_uart_read error\r\n");
+#endif
                 return -1;
             }
 
@@ -1242,17 +1291,21 @@ static int wait_for_socket_input()
 
             if (strstr((char*)read_buffer, ">"))
             {
+#ifdef DEBUG_OUTPUT
                 printf("[%s]\r\n", read_buffer);
                 uint32_t elapsed_time = hal_timer_get_uticks() - start_time;
                 printf("After: %d miliseconds \r\n", (int)(elapsed_time / 1000));
+#endif
                 return 0;
             }
 
             if (strstr((char*)read_buffer, "ERROR\r\n"))
             {
+#ifdef DEBUG_OUTPUT
                 printf("ERROR: [%s]\r\n", read_buffer);
                 uint32_t elapsed_time = hal_timer_get_uticks() - start_time;
                 printf("After: %d miliseconds \r\n", (int)(elapsed_time / 1000));
+#endif
                 return -1;
             }
         }
@@ -1260,13 +1313,17 @@ static int wait_for_socket_input()
         uint32_t current_time = hal_timer_get_uticks();
 		if (current_time < start_time)
         {
+#ifdef DEBUG_OUTPUT
             printf("strange timestamp\r\n");
+#endif
             return -3;
         }
 		if ((current_time - start_time) > timeout_us)
         {
+#ifdef DEBUG_OUTPUT
             printf("timeout. el_count: %d \r\n", read_buffer_el_count);
             printf("[%s]\r\n", read_buffer);
+#endif
             return -2;
         }
     }
@@ -1307,14 +1364,18 @@ static int send_command_and_wait_rcv(char* cmd, uint16_t buffer_len, uint8_t* bu
 			// Buffer is full...
 			if (toread == 0)
 			{
-				printf("Strange! \r\n");
+#ifdef DEBUG_OUTPUT
+				printf("Buffer full \r\n");
+#endif
 				return -4;
 			}
 
 			int retval = hal_uart_read(&read_buffer[read_buffer_el_count], toread);
 			if (retval < 0)
 			{
+#ifdef DEBUG_OUTPUT
 				printf("hal_uart_read error\r\n");
+#endif
 				return -1;
 			}
 			read_buffer_el_count += toread;
@@ -1323,30 +1384,37 @@ static int send_command_and_wait_rcv(char* cmd, uint16_t buffer_len, uint8_t* bu
 
 			if (header_to_read == 0)
 			{
+#ifdef DEBUG_OUTPUT
 				printf("Got header: %s \r\n", read_buffer);
+#endif
 				break;
 			}
 
-			// TODO set it back
-			/*if (strstr((char*)read_buffer, "ERROR\r\n"))
+			if (strstr((char*)read_buffer, "ERROR\r\n"))
 			{
+#ifdef DEBUG_OUTPUT
 				printf("ERROR: [%s]\r\n", read_buffer);
 				uint32_t elapsed_time = hal_timer_get_uticks() - start_time;
 				printf("After: %d miliseconds \r\n", (int)(elapsed_time / 1000));
+#endif
 				return -1;
-			}*/
+			}
 		}
 
 		uint32_t current_time = hal_timer_get_uticks();
 		if (current_time < start_time)
 		{
+#ifdef DEBUG_OUTPUT
 			printf("strange timestamp\r\n");
+#endif
 			return -3;
 		}
 		if ((current_time - start_time) > timeout_us)
 		{
+#ifdef DEBUG_OUTPUT
 			printf("timeout. el_count: %d \r\n", read_buffer_el_count);
 			printf("[%s]\r\n", read_buffer);
+#endif
 			return -2;
 		}
 	}
@@ -1359,7 +1427,9 @@ static int send_command_and_wait_rcv(char* cmd, uint16_t buffer_len, uint8_t* bu
     {
     	if (toread == 0)
 		{
+#ifdef DEBUG_OUTPUT
     		printf("Ok got enough\r\n");
+#endif
     		break;
 		}
 
@@ -1372,7 +1442,9 @@ static int send_command_and_wait_rcv(char* cmd, uint16_t buffer_len, uint8_t* bu
             int retval = hal_uart_read(&buffer[read_address], chunk_size);
             if (retval < 0)
             {
+#ifdef DEBUG_OUTPUT
                 printf("hal_uart_read error\r\n");
+#endif
                 return -1;
             }
 
@@ -1383,12 +1455,16 @@ static int send_command_and_wait_rcv(char* cmd, uint16_t buffer_len, uint8_t* bu
         uint32_t current_time = hal_timer_get_uticks();
 		if (current_time < start_time)
         {
+#ifdef DEBUG_OUTPUT
             printf("strange timestamp\r\n");
+#endif
             return -3;
         }
 		if ((current_time - start_time) > timeout_us)
         {
+#ifdef DEBUG_OUTPUT
             printf("timeout. toread: %d read_address %d \r\n", toread, read_address);
+#endif
             return -2;
         }
     }
@@ -1406,14 +1482,18 @@ static int send_command_and_wait_rcv(char* cmd, uint16_t buffer_len, uint8_t* bu
             // Buffer is full...
             if (toread == 0)
             {
+#ifdef DEBUG_OUTPUT
                 printf("Buffer is full: %s . Readable: %lu \r\n", read_buffer, readable);
+#endif
                 return -4;
             }
 
             int retval = hal_uart_read(&read_buffer[read_buffer_el_count], toread);
             if (retval < 0)
             {
+#ifdef DEBUG_OUTPUT
                 printf("hal_uart_read error\r\n");
+#endif
                 return -1;
             }
             read_buffer_el_count += toread;
@@ -1422,94 +1502,40 @@ static int send_command_and_wait_rcv(char* cmd, uint16_t buffer_len, uint8_t* bu
 
             if (strstr((char*)read_buffer, "OK\r\n"))
             {
+#ifdef DEBUG_OUTPUT
                 printf("[%s]\r\n", read_buffer);
+#endif
                 break;
             }
 
-            // TODO set it back
-            /*if (strstr((char*)read_buffer, "ERROR\r\n"))
+            if (strstr((char*)read_buffer, "ERROR\r\n"))
             {
+#ifdef DEBUG_OUTPUT
                 printf("ERROR: [%s]\r\n", read_buffer);
                 uint32_t elapsed_time = hal_timer_get_uticks() - start_time;
                 printf("After: %d miliseconds \r\n", (int)(elapsed_time / 1000));
+#endif
                 return -1;
-            }*/
+            }
         }
 
         uint32_t current_time = hal_timer_get_uticks();
 		if (current_time < start_time)
         {
+#ifdef DEBUG_OUTPUT
             printf("strange timestamp\r\n");
+#endif
             return -3;
         }
 		if ((current_time - start_time) > timeout_us)
         {
+#ifdef DEBUG_OUTPUT
             printf("timeout. el_count: %d \r\n", read_buffer_el_count);
             printf("[%s]\r\n", read_buffer);
+#endif
             return -2;
         }
     }
-
-//    // Now wait for SRING
-//    uint32_t start_sring_time = hal_timer_get_uticks();
-//    read_buffer_el_count = 0;
-//    for(;;)
-//    {
-//        uint32_t readable = cyhal_uart_readable(&telit_uart_obj);
-//        if (readable > 0)
-//        {
-//            uint16_t remaining_size = BUFFER_SIZE - read_buffer_el_count;
-//            uint16_t toread = (readable > remaining_size)? remaining_size : readable;
-//
-//            // Buffer is full...
-//            if (toread == 0)
-//            {
-//                printf("Buffer is full: %s . Readable: %lu \r\n", read_buffer, readable);
-//                return -4;
-//            }
-//
-//            int retval = hal_uart_read(&read_buffer[read_buffer_el_count], toread);
-//            if (retval < 0)
-//            {
-//                printf("hal_uart_read error\r\n");
-//                return -1;
-//            }
-//            read_buffer_el_count += toread;
-//
-//            read_buffer[read_buffer_el_count] = 0;
-//
-//            if (strstr((char*)read_buffer, "SRING: 1\r\n"))
-//            {
-//            	uint32_t current_time = hal_timer_get_uticks();
-//            	uint32_t elapsed_time_1 = current_time - start_time;
-//            	uint32_t elapsed_time_2 = current_time - start_sring_time;
-//            	printf("Got SRING after %d ms or %d ms\r\n", (int)(elapsed_time_1/1000), (int)(elapsed_time_2/1000));
-//                printf("[%s]\r\n", read_buffer);
-//                break;
-//            }
-//
-//            // TODO set it back
-//            /*if (strstr((char*)read_buffer, "ERROR\r\n"))
-//            {
-//                printf("ERROR: [%s]\r\n", read_buffer);
-//                uint32_t elapsed_time = hal_timer_get_uticks() - start_time;
-//                printf("After: %d miliseconds \r\n", (int)(elapsed_time / 1000));
-//                return -1;
-//            }*/
-//        }
-//
-//        uint32_t current_time = hal_timer_get_uticks();
-//		if (current_time < start_time)
-//        {
-//            printf("strange timestamp\r\n");
-//            return -3;
-//        }
-//		if ((current_time - start_time) > timeout_us)
-//        {
-//            printf("Did not receive SRING timeout. el_count: %d \r\n", read_buffer_el_count);
-//            return -2;
-//        }
-//    }
 
     return 0;
 }
@@ -1606,14 +1632,18 @@ int rab_rtk_telit_socket_write(uint8_t connection_id, uint16_t buffer_len, uint8
             // Buffer is full...
             if (toread == 0)
             {
+#ifdef DEBUG_OUTPUT
                 printf("Buffer is full: %s . Readable: %lu \r\n", read_buffer, readable);
+#endif
                 return -4;
             }
 
             int retval = hal_uart_read(&read_buffer[read_buffer_el_count], toread);
             if (retval < 0)
             {
+#ifdef DEBUG_OUTPUT
                 printf("hal_uart_read error\r\n");
+#endif
                 return -1;
             }
             read_buffer_el_count += toread;
@@ -1622,15 +1652,19 @@ int rab_rtk_telit_socket_write(uint8_t connection_id, uint16_t buffer_len, uint8
 
             if (strstr((char*)read_buffer, "OK\r\n"))
             {
+#ifdef DEBUG_OUTPUT
                 printf("[%s]\r\n", read_buffer);
+#endif
                 return 0;
             }
 
             if (strstr((char*)read_buffer, "ERROR\r\n"))
             {
+#ifdef DEBUG_OUTPUT
                 printf("ERROR: [%s]\r\n", read_buffer);
                 uint32_t elapsed_time = hal_timer_get_uticks() - start_time;
                 printf("After: %d miliseconds \r\n", (int)(elapsed_time / 1000));
+#endif
                 return -1;
             }
         }
@@ -1638,13 +1672,17 @@ int rab_rtk_telit_socket_write(uint8_t connection_id, uint16_t buffer_len, uint8
         uint32_t current_time = hal_timer_get_uticks();
 		if (current_time < start_time)
         {
+#ifdef DEBUG_OUTPUT
             printf("strange timestamp\r\n");
+#endif
             return -3;
         }
 		if ((current_time - start_time) > timeout_us)
         {
+#ifdef DEBUG_OUTPUT
             printf("timeout. el_count: %d \r\n", read_buffer_el_count);
             printf("[%s]\r\n", read_buffer);
+#endif
             return -2;
         }
     }

@@ -59,6 +59,9 @@
 #include "rab_rtk.h"
 #include "hal_timer.h"
 
+#include "ntrip_receiver.h"
+
+
 /*Priority for button interrupts*/
 #define BTN_IRQ_PRIORITY		5
 
@@ -74,7 +77,10 @@ static uint8_t request_start = 0;
 #define BUFFER_SIZE 1024
 uint8_t buffer[BUFFER_SIZE] = {0};
 
-
+void on_rtcm_packet(uint8_t* buffer, uint16_t len)
+{
+	printf("on_rtcm_packet. Len = %d\r\n", len);
+}
 
 
 /*Function prototypes used for this demo.*/
@@ -212,14 +218,14 @@ static void do_telit_stuff_1()
 
 
     // Try to open a socket with the server
-    retval = rab_rtk_telit_open_socket();
+    retval = rab_rtk_telit_open_socket("jordanrutronik.mywire.org", 1507);
     if (retval != 0)
 	{
 		printf("rab_rtk_telit_open_socket error: %d\r\n", retval);
 		return;
 	}
 
-    telit_socket_status_e socket_status = SOCKET_STATUS_CLOSED;
+    telit_raw_socket_status_e socket_status = SOCKET_STATUS_CLOSED;
 
     // Wait until connection state is Okay
     for(int i = 0; i < 5; ++i)
@@ -322,47 +328,60 @@ int main(void)
     printf("\x1b[2J\x1b[;H");
     printf("RDK2 RABRTK LE910C1 Rover\r\n");
 
-    int retval = rab_rtk_init_gpios();
-    if (retval != 0)
-    {
-        printf("rab_rtk_init_gpios error: %d\r\n", retval);
-        handle_error();
-    }
+//    int retval = rab_rtk_init_gpios();
+//    if (retval != 0)
+//    {
+//        printf("rab_rtk_init_gpios error: %d\r\n", retval);
+//        handle_error();
+//    }
+//
+//    retval = hal_timer_init();
+//    if (retval != 0)
+//    {
+//        printf("hal_timer_init error: %d\r\n", retval);
+//        handle_error();
+//    }
+//
+//    retval = rab_rtk_init_telit_uart();
+//    if (retval != 0)
+//    {
+//        printf("rab_rtk_init_telit_uart error: %d\r\n", retval);
+//        handle_error();
+//    }
+//
+    int retval = ntrip_receiver_init(on_rtcm_packet);
+    printf("ntrip_receiver_init returns: %d \r\n", retval);
 
-    retval = hal_timer_init();
-    if (retval != 0)
-    {
-        printf("hal_timer_init error: %d\r\n", retval);
-        handle_error();
-    }
+    //    const uint16_t rPort = 2101;
+    //    char ipaddr[] = "caster.centipede.fr";
 
-    retval = rab_rtk_init_telit_uart();
-    if (retval != 0)
-    {
-        printf("rab_rtk_init_telit_uart error: %d\r\n", retval);
-        handle_error();
-    }
-
-    printf("OK \r\n");
-
+    //ntrip_receiver_open_async("jordanrutronik.mywire.org", 1507, "GUIGO");
+    //ntrip_receiver_open_async("caster.centipede.fr", 2101, "GUIGO");
 
     for(;;)
     {
-        // Cyclic call to process and do
-        //rab_rtk_do();
+    	ntrip_receiver_do();
 
-        if (request_start)
-        {
-            request_start = 0;
-            printf("Turn ON\r\n");
-            rab_rtk_telit_power_on();
-        }
+    	if (request_start)
+    	{
+    		ntrip_receiver_stop_async();
+    	}
 
-        if (request_stop)
-        {
-            request_stop = 0;
-            do_telit_stuff_1();
-        }
+//        // Cyclic call to process and do
+//        //rab_rtk_do();
+//
+//        if (request_start)
+//        {
+//            request_start = 0;
+//            printf("Turn ON\r\n");
+//            rab_rtk_telit_power_on();
+//        }
+//
+//        if (request_stop)
+//        {
+//            request_stop = 0;
+//            do_telit_stuff_1();
+//        }
     }
 }
 

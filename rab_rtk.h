@@ -43,8 +43,10 @@ typedef enum
 	SOCKET_STATUS_LISTENING,
 	SOCKET_STATUS_INCOMING_CONNECTION,
 	SOCKET_STATUS_OPENING_PROCESS
-} telit_socket_status_e;
+} telit_raw_socket_status_e;
 
+
+int rab_rtk_telit_init_hardware();
 
 
 /**
@@ -89,11 +91,11 @@ int rab_rtk_telit_delete_pdp_context(uint8_t id);
 
 int rab_rtk_telit_activate_deactivate_pdp_context(uint16_t context_id, uint16_t status);
 
-int rab_rtk_telit_open_socket();
+int rab_rtk_telit_open_socket(char* address, uint16_t port);
 
 int rab_rtk_telit_close_socket();
 
-int rab_rtk_telit_get_socket_status(telit_socket_status_e* status);
+int rab_rtk_telit_get_socket_status(telit_raw_socket_status_e* status);
 
 int rab_rtk_telit_get_socket_information(uint16_t* sent_size, uint16_t* received_size, uint16_t* buff_in_size);
 
