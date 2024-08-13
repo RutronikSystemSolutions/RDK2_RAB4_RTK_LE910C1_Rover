@@ -41,10 +41,4 @@ void ntrip_receiver_stop_async();
  */
 ntrip_receiver_status_e ntrip_receiver_do();
 
-/**
- * @brief Close connection
- */
-int ntrip_receiver_deinit();
-
-
 #endif /* NTRIP_RECEIVER_H_ */

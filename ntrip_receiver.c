@@ -113,7 +113,8 @@ ntrip_receiver_status_e ntrip_receiver_do()
 					printf("telit_socket_read error: %d\r\n", retval);
 					local_status = NTRIP_RECEIVER_STATUS_ERROR;
 				}
-				printf("Received: %d - buff in: %d \r\n", toread, buff_in_size);
+				// printf("Received: %d - buff in: %d \r\n", toread, buff_in_size);
+				rtcm_listener(read_buffer, toread);
 			}
 
 			if (stop_pending)
@@ -133,11 +134,3 @@ ntrip_receiver_status_e ntrip_receiver_do()
 
 	return local_status;
 }
-
-int ntrip_receiver_deinit()
-{
-	// TODO
-	return 0;
-}
-
-

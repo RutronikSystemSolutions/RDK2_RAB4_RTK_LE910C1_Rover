@@ -37,7 +37,7 @@ static const uint32_t STANDARD_TIMEOUT_US = 500000;
 static const uint32_t TIMEOUT_2SECONDS = 2000000;
 static const uint32_t TIMEOUT_100SECONDS = 100000000;
 
-void hal_uart_callback(void *callback_arg, cyhal_uart_event_t event)
+static void hal_uart_callback(void *callback_arg, cyhal_uart_event_t event)
 {
 	if (event & CYHAL_UART_IRQ_RX_DONE)
 	{
@@ -79,18 +79,18 @@ int rab_rtk_telit_init_hardware()
 
 int rab_rtk_init_gpios()
 {
-//	/**
-//     * SHDN_CTRL -> 200ms high -> Turn OFF the Telit module
-//     * Init to 0
-//     */
-//    cy_rslt_t result = cyhal_gpio_init(SHDN_CTRL, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 0);
-//	if (result != CY_RSLT_SUCCESS) return -1;
+	/**
+     * SHDN_CTRL -> 200ms high -> Turn OFF the Telit module
+     * Init to 0
+     */
+    cy_rslt_t result = cyhal_gpio_init(SHDN_CTRL, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 0);
+	if (result != CY_RSLT_SUCCESS) return -1;
 
 	/**
 	 * ON_OFF_CTRL -> 1s high: Turn ON, 2.5s high: Turn OFF
 	 * Init to 0
 	 */
-	cy_rslt_t result = cyhal_gpio_init(ON_OFF_CTRL, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 0);
+	result = cyhal_gpio_init(ON_OFF_CTRL, CYHAL_GPIO_DIR_OUTPUT, CYHAL_GPIO_DRIVE_STRONG, 0);
 	if (result != CY_RSLT_SUCCESS) return -2;
 
 	/**

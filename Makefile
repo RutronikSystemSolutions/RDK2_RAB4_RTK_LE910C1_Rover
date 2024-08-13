@@ -46,7 +46,7 @@ TARGET=APP_RDK2
 #
 # If APPNAME is edited, ensure to update or regenerate launch
 # configurations for your IDE.
-APPNAME=rdk2-hello-world
+APPNAME=rdk2-rab4-rtk-le910c1-rover
 
 # Name of toolchain to use. Options include:
 #

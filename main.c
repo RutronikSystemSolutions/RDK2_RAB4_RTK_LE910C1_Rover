@@ -61,27 +61,28 @@
 
 #include "ntrip_receiver.h"
 
+#include "hal/hal_uart.h"
+
+#include "um980/um980_app.h"
+#include "um980/packet_printer.h"
+#include "um980/nmea_packet.h"
+
 
 /*Priority for button interrupts*/
 #define BTN_IRQ_PRIORITY		5
 
-
 /**
  * @var request_stop
  * Communication variable between ISR and main process
- * When set to 1, stop of the Telit module is requested
+ * When set to 1, disconnect
  */
 static uint8_t request_stop = 0;
-static uint8_t request_start = 0;
-
-#define BUFFER_SIZE 1024
-uint8_t buffer[BUFFER_SIZE] = {0};
 
 void on_rtcm_packet(uint8_t* buffer, uint16_t len)
 {
-	printf("on_rtcm_packet. Len = %d\r\n", len);
+	cyhal_gpio_toggle(LED1);
+	hal_uart_write(buffer, len);
 }
-
 
 /*Function prototypes used for this demo.*/
 void handle_error(void);
@@ -101,174 +102,34 @@ cyhal_gpio_callback_data_t btn2_data =
 		.callback_arg = NULL,
 };
 
-static void do_telit_stuff_1()
+void do_blink()
 {
-	telit_pin_status_e pin_status = PIN_STATUS_UNKNOWN;
+	static const uint32_t timeout = 500000; // 0.5 seconds
+	static uint32_t last_toggle = 0;
+	uint32_t current = hal_timer_get_uticks();
 
-	int retval = rab_rtk_telit_enable_disable_error_codes(2);
-	if (retval != 0)
+	if ((current < last_toggle) || ((current - last_toggle) > timeout))
 	{
-		printf("rab_rtk_telit_enable_disable_error_codes error: %d\r\n", retval);
-		return;
+		last_toggle = current;
+		cyhal_gpio_toggle(LED2);
 	}
+}
 
-	retval = rab_rtk_telit_get_pin_status(&pin_status);
-	if (retval != 0)
+/**
+ * @brief Listener function that will be called when a new NMEA packet is available
+ *
+ * A typical NMEA packet is a GGA packet containing the position
+ */
+void um980_nmea_listener(uint8_t* buffer, uint16_t len)
+{
+	if (nmea_packet_get_type(buffer, len) == PACKET_TYPE_GGA)
 	{
-		printf("rab_rtk_telit_get_pin_status error: %d\r\n", retval);
-		return;
-	}
-
-	printf("PIN status: %d \r\n", pin_status);
-	if (pin_status != PIN_STATUS_READY)
-	{
-		printf("PIN not ready, stop\r\n");
-		return;
-	}
-
-    // Get the attached operator, if not attached, exit
-    // it will also gives the network type (GSM or other)
-    telit_access_technology_e access_technology = ACCESS_TECHNOLOGY_UNKNOWN;
-    retval = rab_rtk_telit_get_attached_operator(&access_technology);
-    if (retval != 0)
-    {
-        printf("rab_rtk_telit_get_attached_operator error: %d\r\n", retval);
-        return;
-    }
-    printf("Access technology: %d \r\n", access_technology);
-
-    telit_registration_status_e registration_status = REGISTRATION_STATUS_UNKNOWN;
-    retval = rab_rtk_telit_get_registration_status(&registration_status);
-    if (retval != 0)
-    {
-        printf("rab_rtk_telit_get_registration_status error: %d\r\n", retval);
-        return;
-    }
-
-    if (registration_status == REGISTRATION_STATUS_REGISTERED)
-    {
-    	printf("Registration status: REGISTRATION_STATUS_REGISTERED\r\n");
-    }
-    else if (registration_status == REGISTRATION_STATUS_ROAMING)
-    {
-    	printf("Registration status: REGISTRATION_STATUS_ROAMING\r\n");
-    }
-    else
-    {
-    	printf("Not registered to network, stop\r\n");
-    	return;
-    }
-
-    retval = rab_rtk_telit_get_gprs_registration_status();
-    if (retval != 0)
-    {
-        printf("rab_rtk_telit_get_gprs_registration_status error: %d\r\n", retval);
-        return;
-    }
-
-    pdp_context_status_result_t pdp_context_status;
-    retval = rab_rtk_telit_get_pdp_context_status(&pdp_context_status);
-    if (retval != 0)
-    {
-        printf("rab_rtk_telit_get_pdp_context_status error: %d\r\n", retval);
-        return;
-    }
-
-    if (pdp_context_status.status == 0)
-    {
-    	printf("PDP not activated\r\n");
-    }
-    else
-    {
-    	printf("PDP is activated\r\n");
-    }
-
-    retval = rab_rtk_telit_get_supported_pdp_contexts();
-	if (retval != 0)
-	{
-		printf("rab_rtk_telit_get_supported_pdp_contexts error: %d\r\n", retval);
-		return;
-	}
-
-    if (pdp_context_status.status == 0)
-    {
-    	retval = rab_rtk_telit_define_pdp_context();
-		if (retval != 0)
+		um980_gga_packet_t gga_data;
+		if (gga_packet_extract_data(buffer, len, &gga_data) == 0)
 		{
-			printf("rab_rtk_telit_define_pdp_context error: %d\r\n", retval);
-			return;
-		}
-
-        // Only activate the context if needed
-        retval = rab_rtk_telit_activate_deactivate_pdp_context(1, 1);
-    }
-    else
-    {
-        retval = rab_rtk_telit_activate_deactivate_pdp_context(1, 0);
-        printf("PDP context deactivated now, return \r\n");
-        return;
-    }
-
-    if (retval != 0)
-    {
-        printf("rab_rtk_telit_activate_deactivate_pdp_context error: %d\r\n", retval);
-        return;
-    }
-
-
-
-    // Try to open a socket with the server
-    retval = rab_rtk_telit_open_socket("jordanrutronik.mywire.org", 1507);
-    if (retval != 0)
-	{
-		printf("rab_rtk_telit_open_socket error: %d\r\n", retval);
-		return;
-	}
-
-    telit_raw_socket_status_e socket_status = SOCKET_STATUS_CLOSED;
-
-    // Wait until connection state is Okay
-    for(int i = 0; i < 5; ++i)
-    {
-        rab_rtk_telit_get_socket_status(&socket_status);
-        if (socket_status != SOCKET_STATUS_CLOSED) break;
-        CyDelay(500);
-    }
-
-    if (socket_status == SOCKET_STATUS_CLOSED)
-    {
-    	printf("Connection closed - close socket and exit. \r\n");
-    	rab_rtk_telit_close_socket();
-    	return;
-    }
-
-    char tosend[]  = "GET /GUIGO HTTP/1.0\r\nUser-Agent: NTRIP RutronikClient/20231025\r\nAccept: */*\r\nConnection: close\r\n\r\n";
-
-    printf("Connection opened - send request %s \r\n", tosend);
-
-    rab_rtk_telit_socket_write(1, strlen(tosend), (uint8_t*)tosend);
-
-    printf("***********************************\r\n");
-
-    for(int i = 0; i < 2; ++i)
-	{
-    	uint8_t read_buffer[128] = {0};
-
-		rab_rtk_telit_get_socket_status(&socket_status);
-		CyDelay(1000);
-
-		uint16_t sent_size = 0;
-		uint16_t received_size = 0;
-		uint16_t buff_in_size = 0;
-		rab_rtk_telit_get_socket_information(&sent_size, &received_size, &buff_in_size);
-
-		if (buff_in_size > 0)
-		{
-			rab_rtk_telit_socket_read(1, 128, read_buffer);
+			packet_printer_print_gga(&gga_data);
 		}
 	}
-
-    rab_rtk_telit_close_socket();
 }
 
 int main(void)
@@ -328,60 +189,78 @@ int main(void)
     printf("\x1b[2J\x1b[;H");
     printf("RDK2 RABRTK LE910C1 Rover\r\n");
 
-//    int retval = rab_rtk_init_gpios();
-//    if (retval != 0)
-//    {
-//        printf("rab_rtk_init_gpios error: %d\r\n", retval);
-//        handle_error();
-//    }
-//
-//    retval = hal_timer_init();
-//    if (retval != 0)
-//    {
-//        printf("hal_timer_init error: %d\r\n", retval);
-//        handle_error();
-//    }
-//
-//    retval = rab_rtk_init_telit_uart();
-//    if (retval != 0)
-//    {
-//        printf("rab_rtk_init_telit_uart error: %d\r\n", retval);
-//        handle_error();
-//    }
-//
+    // Initialize UART (for UM980)
+	if (hal_uart_init() != 0)
+	{
+		handle_error();
+	}
+	printf("UART initialized.\r\n");
+
     int retval = ntrip_receiver_init(on_rtcm_packet);
     printf("ntrip_receiver_init returns: %d \r\n", retval);
 
-    //    const uint16_t rPort = 2101;
-    //    char ipaddr[] = "caster.centipede.fr";
+    // Initialize UM980
+	um980_app_init_hal(hal_uart_readable, hal_uart_read, hal_uart_write, hal_timer_get_uticks);
+	um980_app_set_nmea_listener(um980_nmea_listener);
 
-    //ntrip_receiver_open_async("jordanrutronik.mywire.org", 1507, "GUIGO");
-    //ntrip_receiver_open_async("caster.centipede.fr", 2101, "GUIGO");
+	// Stop message generation (correction and position)
+	// Wait until successful - First call might fail because of strange startup behavior
+	for(;;)
+	{
+		retval = um980_app_unlog();
+		if (retval != 0)
+		{
+			printf("um980_app_unlog error %d ! \r\n", retval);
+			Cy_SysLib_Delay(1000);
+			um980_app_reset();
+		}
+		else break;
+	}
+
+	if (um980_app_set_mode_rover() != 0)
+	{
+		printf("um980_app_set_mode_rover error ! \r\n");
+		handle_error();
+	}
+
+	// Wait until connected to the Internet
+	for(;;)
+	{
+		ntrip_receiver_status_e status = ntrip_receiver_do();
+		if (status == NTRIP_RECEIVER_STATUS_CONNECTED_TO_INTERNET)
+		{
+			printf("Alright, connected, continue\r\n");
+			break;
+		}
+	}
+
+	// Now connected to the Internet
+	// Request position every second
+	if (um980_app_start_gga_generation(2) != 0)
+	{
+		printf("um980_app_start_gga_generation error ! \r\n");
+		handle_error();
+	}
+
+	// Open connection with NTRIP provider
+    ntrip_receiver_open_async("caster.centipede.fr", 2101, "GUIGO");
 
     for(;;)
     {
     	ntrip_receiver_do();
 
-    	if (request_start)
+    	if (um980_app_do() != 0)
+		{
+			printf("Error app_do()\r\n");
+			handle_error();
+		}
+
+    	if (request_stop)
     	{
     		ntrip_receiver_stop_async();
     	}
 
-//        // Cyclic call to process and do
-//        //rab_rtk_do();
-//
-//        if (request_start)
-//        {
-//            request_start = 0;
-//            printf("Turn ON\r\n");
-//            rab_rtk_telit_power_on();
-//        }
-//
-//        if (request_stop)
-//        {
-//            request_stop = 0;
-//            do_telit_stuff_1();
-//        }
+    	do_blink();
     }
 }
 
@@ -390,7 +269,7 @@ void btn1_interrupt_handler(void *handler_arg, cyhal_gpio_event_t event)
 {
 	CY_UNUSED_PARAMETER(handler_arg);
     CY_UNUSED_PARAMETER(event);
-    request_start = 1;
+    request_stop = 1;
 }
 
 /* Interrupt handler callback function */
@@ -404,9 +283,14 @@ void btn2_interrupt_handler(void *handler_arg, cyhal_gpio_event_t event)
 /*If initialization fails, program ends up here.*/
 void handle_error(void)
 {
+	printf("Something wrong happened. \r\n");
+
+	// both LEDs OFF
+	cyhal_gpio_write(LED1, CYBSP_LED_STATE_OFF);
+	cyhal_gpio_write(LED2, CYBSP_LED_STATE_OFF);
+
      /* Disable all interrupts. */
     __disable_irq();
-
     CY_ASSERT(0);
 }
 
