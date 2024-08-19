@@ -3,6 +3,13 @@
  *
  *  Created on: 13 Aug 2024
  *      Author: jorda
+ *
+ * Rutronik Elektronische Bauelemente GmbH Disclaimer: The evaluation board
+ * including the software is for testing purposes only and,
+ * because it has limited functions and limited resilience, is not suitable
+ * for permanent use under real conditions. If the evaluation board is
+ * nevertheless used under real conditions, this is done at one’s responsibility;
+ * any liability of Rutronik is insofar excluded
  */
 
 #include "telit_socket.h"
@@ -52,7 +59,7 @@ static int init_internet_connection()
 		return -3;
 	}
 
-	// TODO: need to wait for the attached operator (it might take time....)
+	// Need to wait for the attached operator (it might take time....)
 	telit_access_technology_e access_technology = ACCESS_TECHNOLOGY_UNKNOWN;
 	for(int i = 0; i < 20; ++i)
 	{
@@ -114,12 +121,7 @@ static int init_internet_connection()
 	{
 		// if already activated, deactivate it (because else some strange behavior when opening a socket
 		printf("PDP activated -> Deactivate it \r\n");
-		retval = rab_rtk_telit_activate_deactivate_pdp_context(1, 0);
-//		if (retval != 0)
-//		{
-//			printf("rab_rtk_telit_activate_deactivate_pdp_context error: %d\r\n", retval);
-//			return -8;
-//		}
+		rab_rtk_telit_activate_deactivate_pdp_context(1, 0);
 		return -8;
 	}
 

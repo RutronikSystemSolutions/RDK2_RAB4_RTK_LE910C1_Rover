@@ -1,143 +1,85 @@
-# RDK2 Hello World
+# RDK2 - Rover using RDK2 and RAB4-RTK
 
-Rutronik Development Kit Programmable System-on-Chip CY8C6245AZI-S3D72 "Hello World" Example. 
+This example demonstrates how to use the UM980 sensor as a rover (moving unit for which we want to know the position).
 
-This example is an introduction to the basic components of the board: LEDs, Buttons and KitProg3 UART for debug.
+To get very accurate (~2 cm precision) positioning, the UM980 needs correction data (RTCM). Those correction data are gathered from the Internet using the LE910C1 modem from Telit.
 
-<img src="images/rdk2_rev1.jpg" style="zoom:80%;" />
+Remarks: 
+- Almost 800 bytes/seconds data reception is necessary to receive the correction data.
+- A "free of charge" provider is used for this example. You can of course change it for your needs.
+
+<img src="pictures/rdk2_rab4_rtk_antennas.jpg" style="zoom:25%;" />
+<img src="pictures/overview.png" style="zoom:50%;" />
+
+Once started, the demonstrator output the current coordinates on a serial terminal:
+
+<img src="pictures/serial_terminal_output.png" style="zoom:100%;" />
+
+On the previous screenshot, you can see that the quality is "5" which means that the module uses RTCM correction data to compute its position. Quality "5" means RTK float (i.e. a precision of about 50 cm). The best quality you can have is "4" which means RTK fix (precision of about 2 cm).
 
 ## Requirements
 
-- [ModusToolbox® software](https://www.infineon.com/cms/en/design-support/tools/sdk/modustoolbox-software/) **v3.x** [built with **v3.0**]
-
-## Supported toolchains (make variable 'TOOLCHAIN')
-
-- GNU Arm&reg; Embedded Compiler v11.3.1 (`GCC_ARM`) - Default value of `TOOLCHAIN`
-
-## Using the code example
-
-Create the project and open it using one of the following:
-
-<details><summary><b>In Eclipse IDE for ModusToolbox&trade; software</b></summary>
+- [ModusToolbox® software](https://www.infineon.com/cms/en/design-support/tools/sdk/modustoolbox-software/) **v3.x** [built with **v3.1**]
+- [RAB4-RTK](https://www.rutronik24.com/product/rutronik/rab4rtk/21856667.html)
+- [RDK2](https://www.rutronik24.fr/produit/rutronik/rdk2/16440182.html)
+- [GNSS antenna (at least L1/L2 or L1/L5)](https://www.2j-antennas.com/antennas/single-external-antennas/2j7c01mc2f-high-precision-gps-glonass-sbas-rtk-l1-l2-dome-magnetic-mount-antenna/381)
+- [4G LTE antenna](https://www.2j-antennas.com/antennas/combination-external-antennas/2j6924ma-phoenix-cellular-4g-lte-3g-2g-mimo-ip67-ip69-magnetic-mount-antenna/486)
+- A valid SIM card. A SIM card from Telit is provided with the RAB4-RTK (data consumption limited to 100MB).
 
 
-1. Click the **New Application** link in the **Quick Panel** (or, use **File** > **New** > **ModusToolbox&trade; Application**). This launches the [Project Creator](https://www.infineon.com/ModusToolboxProjectCreator) tool.
+## Needed hardware modifications
 
-2. Pick a kit supported by the code example from the list shown in the **Project Creator - Choose Board Support Package (BSP)** dialog.
+When powering the RDK2 from the KitProg3 USB interface, the current consumption is limited to 0.4A (using the TCK22946G load switch from Toshiba). That is not enough to power the Telit LE910C1 modem and the Unicore UM980 GNSS sensor. To make the demonstrator work, you will need to short the load switch as done in the picture below (green cable):
 
-   When you select a supported kit, the example is reconfigured automatically to work with the kit. To work with a different supported kit later, use the [Library Manager](https://www.infineon.com/ModusToolboxLibraryManager) to choose the BSP for the supported kit. You can use the Library Manager to select or update the BSP and firmware libraries used in this application. To access the Library Manager, click the link from the **Quick Panel**.
+<img src="pictures/rdk2_load_switch_short.jpg" style="zoom:20%;" />
 
-   You can also just start the application creation process again and select a different kit.
+## Software modifications
 
-   If you want to use the application for a kit not listed here, you may need to update the source files. If the kit does not have the required resources, the application may not work.
+If you are not using a Telit SIM card, you will need to change the access point name in the file "rab_rtk.c". This is done in the method **rab_rtk_telit_define_pdp_context".
 
-3. In the **Project Creator - Select Application** dialog, choose the example by enabling the checkbox.
+    char cmd[] = "AT+CGDCONT=1,\"IP\",\"nxt20p.net\"\r\n";
 
-4. (Optional) Change the suggested **New Application Name**.
-
-5. The **Application(s) Root Path** defaults to the Eclipse workspace which is usually the desired location for the application. If you want to store the application in a different location, you can change the *Application(s) Root Path* value. Applications that share libraries should be in the same root path.
-
-6. Click **Create** to complete the application creation process.
-
-For more details, see the [Eclipse IDE for ModusToolbox&trade; software user guide](https://www.infineon.com/MTBEclipseIDEUserGuide) (locally available at *{ModusToolbox&trade; software install directory}/docs_{version}/mt_ide_user_guide.pdf*).
-
-</details>
-
-<details><summary><b>In command-line interface (CLI)</b></summary>
+Replace **nxt20p.net** with the correct access point name.
 
 
-ModusToolbox&trade; software provides the Project Creator as both a GUI tool and the command line tool, "project-creator-cli". The CLI tool can be used to create applications from a CLI terminal or from within batch files or shell scripts. This tool is available in the *{ModusToolbox&trade; software install directory}/tools_{version}/project-creator/* directory.
+To change the NTRIP provider (and mount point) you will need to change the configuration in the file "main.c":
 
-Use a CLI terminal to invoke the "project-creator-cli" tool. On Windows, use the command line "modus-shell" program provided in the ModusToolbox&trade; software installation instead of a standard Windows command-line application. This shell provides access to all ModusToolbox&trade; software tools. You can access it by typing `modus-shell` in the search box in the Windows menu. In Linux and macOS, you can use any terminal application.
+    ntrip_receiver_open_async("caster.centipede.fr", 2101, "GUIGO");
 
-The "project-creator-cli" tool has the following arguments:
+## Telit LE910C1 initialization
 
-| Argument          | Description                                                  | Required/optional |
-| ----------------- | ------------------------------------------------------------ | ----------------- |
-| `--board-id`      | Defined in the `<id>` field of the [BSP](https://github.com/Infineon?q=bsp-manifest&type=&language=&sort=) manifest | Required          |
-| `--app-id`        | Defined in the `<id>` field of the [CE](https://github.com/Infineon?q=ce-manifest&type=&language=&sort=) manifest | Required          |
-| `--target-dir`    | Specify the directory in which the application is to be created if you prefer not to use the default current working directory | Optional          |
-| `--user-app-name` | Specify the name of the application if you prefer to have a name other than the example's default name | Optional          |
-
-<br />
-
-The following example clones the "[Hello world](https://github.com/Infineon/mtb-example-hal-hello-world)" application with the desired name "MyHelloWorld" configured for the *CY8CPROTO-062-4343W* BSP into the specified working directory, *C:/mtb_projects*:
-
-   ```
-   project-creator-cli --board-id CY8CPROTO-062-4343W --app-id mtb-example-hal-hello-world --user-app-name MyHelloWorld --target-dir "C:/mtb_projects"
-   ```
-
-**Note:** The project-creator-cli tool uses the `git clone` and `make getlibs` commands to fetch the repository and import the required libraries. For details, see the "Project creator tools" section of the [ModusToolbox&trade; software user guide](https://www.infineon.com/ModusToolboxUserGuide) (locally available at *{ModusToolbox&trade; software install directory}/docs_{version}/mtb_user_guide.pdf*).
-
-To work with a different supported kit later, use the [Library Manager](https://www.infineon.com/ModusToolboxLibraryManager) to choose the BSP for the supported kit. You can invoke the Library Manager GUI tool from the terminal using `make modlibs` command or use the Library Manager CLI tool "library-manager-cli" to change the BSP.
-
-The "library-manager-cli" tool has the following arguments:
-
-| Argument             | Description                                                  | Required/optional |
-| -------------------- | ------------------------------------------------------------ | ----------------- |
-| `--add-bsp-name`     | Name of the BSP that should be added to the application      | Required          |
-| `--set-active-bsp`   | Name of the BSP that should be as active BSP for the application | Required          |
-| `--add-bsp-version`  | Specify the version of the BSP that should be added to the application if you do not wish to use the latest from manifest | Optional          |
-| `--add-bsp-location` | Specify the location of the BSP (local/shared) if you prefer to add the BSP in a shared path | Optional          |
-
-<br />
-
-Following example adds the CY8CPROTO-062-4343W BSP to the already created application and makes it the active BSP for the app:
-
-   ```
-   library-manager-cli --project "C:/mtb_projects/MyHelloWorld" --add-bsp-name CY8CPROTO-062-4343W --add-bsp-version "latest-v4.X" --add-bsp-location "local"
-
-   library-manager-cli --project "C:/mtb_projects/MyHelloWorld" --set-active-bsp APP_CY8CPROTO-062-4343W
-   ```
-
-</details>
-
-<details><summary><b>In third-party IDEs</b></summary>
+<img src="pictures/telit_software_flow.png" style="zoom:50%;" />
 
 
-Use one of the following options:
+## Using the code example with a ModusToolbox™ IDE:
 
-- **Use the standalone [Project Creator](https://www.infineon.com/ModusToolboxProjectCreator) tool:**
+The example can be directly imported inside Modus Toolbox by doing:
+1) File -> New -> Modus Toolbox Application
+2) PSoC 6 BSPs -> RDK2
+3) Sensing -> RDK2 RAB4 RTK LE910C1 Rover
 
-  1. Launch Project Creator from the Windows Start menu or from *{ModusToolbox&trade; software install directory}/tools_{version}/project-creator/project-creator.exe*.
+A new project will be created inside your workspace.
 
-  2. In the initial **Choose Board Support Package** screen, select the BSP, and click **Next**.
+To program the software on the PSoC62, use the KitProg3 USB connector. Build the application (using the link in Modus Toolbox) and click on **RDK2_RAB4_RTK_LE910C1_Rover Program (KitProg3_MiniProg4)**.
 
-  3. In the **Select Application** screen, select the appropriate IDE from the **Target IDE** drop-down menu.
+<img src="pictures/rdk2_program.png" style="zoom:15%;" />
 
-  4. Click **Create** and follow the instructions printed in the bottom pane to import or open the exported project in the respective IDE.
+## Operation
 
-<br />
+Simply plug a USB-cable into the KitProg3 USB connector of the RDK2 and connect it to your computer. The LEDs will start to flash. Meaning of the LEDs:
 
-- **Use command-line interface (CLI):**
-
-  1. Follow the instructions from the **In command-line interface (CLI)** section to create the application.
-
-  2. Export the application to a supported IDE using the `make <ide>` command.
-
-  3. Follow the instructions displayed in the terminal to create or import the application as an IDE project.
-
-For a list of supported IDEs and more details, see the "Exporting to IDEs" section of the [ModusToolbox&trade; software user guide](https://www.infineon.com/ModusToolboxUserGuide) (locally available at *{ModusToolbox&trade; software install directory}/docs_{version}/mtb_user_guide.pdf*).
-
-</details>
-
-### Operation
-
-The firmware example uses KitProg3 Debug UART for debug output. LED1 and LED2 is selected to blink once per second as a button USER_BTN1 or USER_BTN2 is pressed accordingly. Also LEDs are selected if **Enter** key is pressed on the terminal. Use yours preferred terminal software to track the debug output. 
-
-<img src="images/debug_output_hello_world.png" style="zoom:100%;" />
-
-### Debugging
-
-If you successfully have imported the example, the debug configurations are already prepared to use with a the KitProg3, MiniProg4, or J-link. Open the ModusToolbox perspective and find the Quick Panel. Click on the desired debug launch configuration and wait for the programming to complete and debugging process to start.
-
-<img src="images/hello_world_debug_start.png" style="zoom:100%;" />
+LED1 | LED2 | System status 
+--- | --- | ---
+OFF | OFF | Error state. Something wrong happened. Use the KitProg3 USB connector and a serial terminal to read the error messages.
+--- | --- | ---
+x | Blinking | Software is running
+Blinking | x | RTCM correction data are being received by the Telit LE910C1 modem.
 
 ## Legal Disclaimer
 
 The evaluation board including the software is for testing purposes only and, because it has limited functions and limited resilience, is not suitable for permanent use under real conditions. If the evaluation board is nevertheless used under real conditions, this is done at one’s responsibility; any liability of Rutronik is insofar excluded. 
 
-<img src="images/rutronik_origin_kaunas.png" style="zoom:50%;" />
+<img src="pictures/rutronik.png" style="zoom:50%;" />
 
 
 
