@@ -1,17 +1,17 @@
-# RDK2 - Rover using RDK2 and RAB4-RTK
+# RAB4-RTK Rover using NTRIP over the LTE-CAT1
 
 This example demonstrates how to use the UM980 sensor as a rover (moving unit for which we want to know the position).
 
 To get very accurate (~2 cm precision) positioning, the UM980 needs correction data (RTCM). Those correction data are gathered from the Internet using the LE910C1 modem from Telit.
 
 Remarks: 
-- Almost 800 bytes/seconds data reception is necessary to receive the correction data.
+- Almost 800 bytes/seconds of data reception is necessary to receive the correction data.
 - A "free of charge" provider is used for this example. You can of course change it for your needs.
 
 <img src="pictures/rdk2_rab4_rtk_antennas.jpg" style="zoom:25%;" />
 <img src="pictures/overview.png" style="zoom:50%;" />
 
-Once started, the demonstrator output the current coordinates on a serial terminal:
+Once started, the demonstrator outputs the current coordinates on a serial terminal:
 
 <img src="pictures/serial_terminal_output.png" style="zoom:100%;" />
 
@@ -61,8 +61,6 @@ The example can be directly imported inside Modus Toolbox by doing:
 A new project will be created inside your workspace.
 
 To program the software on the PSoC62, use the KitProg3 USB connector. Build the application (using the link in Modus Toolbox) and click on **RDK2_RAB4_RTK_LE910C1_Rover Program (KitProg3_MiniProg4)**.
-
-<img src="pictures/rdk2_program.png" style="zoom:15%;" />
 
 ## Operation
 
