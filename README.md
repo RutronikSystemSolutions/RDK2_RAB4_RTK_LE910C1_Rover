@@ -1,12 +1,12 @@
 # RAB4-RTK Rover using NTRIP over the LTE-CAT1
 
-This example demonstrates how to use the UM980 sensor as a rover (moving unit for which we want to know the position).
+This example demonstrates how to use the UM980 sensor as a rover (a moving unit for which we want to know the position).
 
-To get very accurate (~2 cm precision) positioning, the UM980 needs correction data (RTCM). Those correction data are gathered from the Internet using the LE910C1 modem from Telit.
+To get very accurate (~2 cm precision) positioning, the UM980 needs correction data (RTCM). The correction data are gathered from the Internet using the LE910C1 modem from Telit.
 
 Remarks: 
 - Almost 800 bytes/seconds of data reception is necessary to receive the correction data.
-- A "free of charge" provider is used for this example. You can of course change it for your needs.
+- A "free of charge" provider is used for this example. You can, of course, change it for your needs.
 
 <img src="pictures/rdk2_rab4_rtk_antennas.jpg" style="zoom:25%;" />
 <img src="pictures/overview.png" style="zoom:50%;" />
@@ -15,11 +15,11 @@ Once started, the demonstrator outputs the current coordinates on a serial termi
 
 <img src="pictures/serial_terminal_output.png" style="zoom:100%;" />
 
-On the previous screenshot, you can see that the quality is "5" which means that the module uses RTCM correction data to compute its position. Quality "5" means RTK float (i.e. a precision of about 50 cm). The best quality you can have is "4" which means RTK fix (precision of about 2 cm).
+In the previous screenshot, you can see that the quality is "5", which means that the module uses RTCM correction data to compute its position. Quality "5" means RTK float (i.e. a precision of about 50 cm). The best quality you can have is "4" which means RTK fix (precision of about 2 cm).
 
 ## Requirements
 
-- [ModusToolbox® software](https://www.infineon.com/cms/en/design-support/tools/sdk/modustoolbox-software/) **v3.x** [built with **v3.1**]
+- [ModusToolbox® software](https://www.infineon.com/cms/en/design-support/tools/sdk/modustoolbox-software/) **v2025.4.0** [built with **v3.1**]
 - [RAB4-RTK](https://www.rutronik24.com/product/rutronik/rab4rtk/21856667.html)
 - [RDK2](https://www.rutronik24.fr/produit/rutronik/rdk2/16440182.html)
 - [GNSS antenna (at least L1/L2 or L1/L5)](https://www.2j-antennas.com/antennas/single-external-antennas/2j7c01mc2f-high-precision-gps-glonass-sbas-rtk-l1-l2-dome-magnetic-mount-antenna/381)
